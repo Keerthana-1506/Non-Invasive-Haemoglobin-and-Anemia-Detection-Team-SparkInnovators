@@ -1,0 +1,140 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+// LCD address and size
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+// Pin connections
+const int IR_PIN = 2;          // IR finger detection
+const int RED_LED = 7;         // Red LED
+const int PHOTODIODE = A0;     // Photodiode analog output
+
+// Selected project threshold
+const float HB_THRESHOLD = 12.0;
+
+// Calibration constants
+// Hb = CAL_A * opticalValue + CAL_B
+const float CAL_A = 0.01;
+const float CAL_B = 5.0;
+
+void setup()
+{
+  pinMode(IR_PIN, INPUT);
+  pinMode(RED_LED, OUTPUT);
+
+  Serial.begin(9600);
+
+  lcd.init();
+  lcd.backlight();
+
+  lcd.setCursor(0, 0);
+  lcd.print("Hb Monitoring");
+  lcd.setCursor(0, 1);
+  lcd.print("Place Finger");
+
+  digitalWrite(RED_LED, LOW);
+
+  delay(2000);
+  lcd.clear();
+}
+
+void loop()
+{
+  // Check whether finger is detected
+  int fingerStatus = digitalRead(IR_PIN);
+
+  if (fingerStatus == HIGH)
+  {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Finger Detected");
+    lcd.setCursor(0, 1);
+    lcd.print("Measuring...");
+
+    // Turn ON red LED
+    digitalWrite(RED_LED, HIGH);
+
+    delay(500);
+
+    // Find maximum photodiode value
+    int maxValue = 0;
+
+    for (int i = 0; i < 100; i++)
+    {
+      int sensorValue = analogRead(PHOTODIODE);
+
+      if (sensorValue > maxValue)
+      {
+        maxValue = sensorValue;
+      }
+
+      delay(20);
+    }
+
+    // Calculate estimated hemoglobin
+    float Hb = (CAL_A * maxValue) + CAL_B;
+
+    // Serial monitor
+    Serial.print("Maximum Optical Value: ");
+    Serial.println(maxValue);
+
+    Serial.print("Estimated Hb: ");
+    Serial.print(Hb);
+    Serial.println(" g/dL");
+
+    // Display Hb value
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Hemoglobin:");
+
+    lcd.setCursor(0, 1);
+    lcd.print(Hb, 1);
+    lcd.print(" g/dL");
+
+    delay(3000);
+
+    // Check selected threshold
+    lcd.clear();
+
+    if (Hb < HB_THRESHOLD)
+    {
+      lcd.setCursor(0, 0);
+      lcd.print("Hb LOW:");
+      lcd.setCursor(0, 1);
+      lcd.print("ANEMIA");
+    }
+    else
+    {
+      lcd.setCursor(0, 0);
+      lcd.print("Hb Normal");
+      lcd.setCursor(0, 1);
+      lcd.print("Value: ");
+      lcd.print(Hb, 1);
+    }
+
+    // Turn OFF red LED
+    digitalWrite(RED_LED, LOW);
+
+    delay(4000);
+
+    // Ready for next measurement
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Place Finger");
+    lcd.setCursor(0, 1);
+    lcd.print("For Next Test");
+  }
+
+  else
+  {
+    // No finger detected
+    digitalWrite(RED_LED, LOW);
+
+    lcd.setCursor(0, 0);
+    lcd.print("Place Finger   ");
+    lcd.setCursor(0, 1);
+    lcd.print("Waiting...     ");
+  }
+
+  delay(200);
+}
